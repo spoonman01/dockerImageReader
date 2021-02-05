@@ -1,0 +1,160 @@
+{
+	"info": {
+		"_postman_id": "4189dad2-56ab-492b-b845-27ffc5561a97",
+		"name": "Docker Registry Rest Api",
+		"description": "This collection interacts with the Docker Registry HTTP API (v2), allowing the management of docker images on your registry via Rest API instead of docker command.\n\nThis may be useful if you can't use the docker command directly in some environments, or if you want some automation to check/pull images when a new version is released on your registry.\nBy using a Postman Monitor, the first scheduled request will fetch all images from your registry and then the second request will run in a loop, sending the images current tag to a webhook of your choice. ",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Get images",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if(pm.response.code === 200){",
+							"    var repositoryArray = JSON.parse(responseBody).repositories;",
+							"    if (repositoryArray.length > 0) {",
+							"        // Save in variables the fetched repository, they will be used by the next request",
+							"        pm.collectionVariables.set('repository', repositoryArray[0]);",
+							"        pm.collectionVariables.set('repositoryArray', repositoryArray);",
+							"    } else {",
+							"        postman.setNextRequest(null);",
+							"    }",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://{{host}}:{{port}}/v2/_catalog",
+					"protocol": "https",
+					"host": [
+						"{{host}}"
+					],
+					"port": "{{port}}",
+					"path": [
+						"v2",
+						"_catalog"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get image versions",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Forward docker image latest tags via webkook",
+							"const postRequest = {",
+							"    url: pm.collectionVariables.get('webhook-uri'),",
+							"    method: 'POST',",
+							"    header: {",
+							"        'Content-Type': 'application/json',",
+							"    },",
+							"    body: {",
+							"        mode: 'raw',",
+							"        raw: response.json()",
+							"    }",
+							"};",
+							"pm.sendRequest(postRequest, (error, response) => {",
+							"    console.log(error ? error : response.json());",
+							"});",
+							"",
+							"// Loop this request for each repository",
+							"var currentRepository = pm.collectionVariables.get('repository');",
+							"var repositoryArray = pm.collectionVariables.get('repositoryArray');",
+							"var nextRepositoryIndex = repositoryArray.indexof(currentRepository) + 1;",
+							"if (nextRepositoryIndex < repositoryArray.length - 1) {",
+							"    pm.collectionVariables.set('repository', repositoryArray[nextRepositoryIndex])",
+							"    postman.setNextRequest(request.name);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://{{host}}:{{port}}/v2/{{repository}}/tags/list",
+					"protocol": "https",
+					"host": [
+						"{{host}}"
+					],
+					"port": "{{port}}",
+					"path": [
+						"v2",
+						"{{repository}}",
+						"tags",
+						"list"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{bearer-token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"pm.test(\"Status code is 200\", function () {",
+					"    pm.response.to.have.status(200);",
+					"});"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "bearer-token",
+			"value": "xvz1evFS4wEEPTGEFPHBog"
+		},
+		{
+			"key": "host",
+			"value": "my-registry-host"
+		},
+		{
+			"key": "port",
+			"value": "5000"
+		},
+		{
+			"key": "webhook-uri",
+			"value": "http://my-site/webhook"
+		},
+		{
+			"key": "repository",
+			"value": "imageName"
+		}
+	]
+}
